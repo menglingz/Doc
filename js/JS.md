@@ -1245,11 +1245,168 @@ console.log($('input:checked').length);
 
 
 
+### 十、函数柯里化
+
+- currying，把接收多个参数的函数变为接收单一单一参数的函数，并且返回接收剩余参数而且返回结果的新函数
 
 
+- 例：利用函数柯里化实现`let a = add(1)(2)(3)()`
+
+```js
+const add=(a)=>{
+  let current=a;
+  let adder=function(b:any){
+    if(b){
+      current=current+b;
+      return adder;
+    }
+    return current;
+  }
+  return adder;
+}
+```
+
+### 十一、bind函数
+
+- bind函数最常见的用法是绑定函数的上下文，除此之外，bind函数还有两个特殊的用法，一个是柯里化，一个是绑定构造函数无效。
+
+  - 柯里化
+
+    ```js
+    var test = function (b) {
+      console.log(this.a + b)
+    }
+    // 如果直接执行test，最终打印的是10.
+    var bindTest1 = test.bind({ a: 20 })
+    bindTest1()  // 10
+    bindTest1(10) // 30
+    // 这里的bind是个柯里化的函数
+    var bindTest2 = test.bind({ a: 20 }, 10)
+    bindTest2()  // 30
+    ```
 
 
+  - 绑定构造函数无效
 
+    - 其实准确的来说，bind并不是对构造函数无效，只是对new的时候无效，如果直接执行构造函数，那么还是有效的。
+
+    ```js
+    var a = 10
+    var Test = function (a) {
+      console.log(this.a)
+    }
+    var bindTest = Test.bind({ a: 20 })
+    bindTest() // 20
+    // 在new的时候，Test中的this并没有指向bind中的对象
+    new bindTest()
+    ```
+
+
+- 实现一个简单的bind
+
+  - 由于是在函数上调用bind，所以bind方法肯定存在于Function.prototype上面
+
+  - 其次bind函数要有改变上下文的作用，我们想一想，怎么才能改变上下文？没错，就是call和apply方法。
+
+  - 然后还要可以柯里化，还好这里只是简单的柯里化，我们只要在bind中返回一个新的函数，并且将前后两次的参数收集起来就可以做到了。
+
+  - 这里我们还需要考虑一下，怎么做才能让在new的时候无效，而其他时候有效？我们需要在returnFunc里面的apply第一个参数进行判断，如果是用new调用构造函数的时候应该传入函数本身，否则才应该传入context。
+
+    ```js
+    Function.prototype.bind = function() {
+      var args = arguments || [];
+      var context = args[0];
+      var func = this;
+      var thisArgs = Array.prototype.slice.call(args, 1);
+      var returnFunc = function() {
+        Array.prototype.push.apply(thisArgs, arguments);
+        // 最关键的一步，this是new returnFunc中创建的那个新对象，此时将其传给func函数，其实相当于做了new操作最后一步（执行构造函数）
+        return func.apply(this instanceof func ? this : context, thisArgs);
+      }
+      returnFunc.prototype = new func()
+      return returnFunc
+    }
+    ```
+
+### 十二、数组打平（扁平化）
+
+- 数组的扁平化其实就是将一个[嵌套](https://so.csdn.net/so/search?q=%E5%B5%8C%E5%A5%97&spm=1001.2101.3001.7020)多层的数组 `array`（嵌套可以是任何层数）转换为只有一层的数组
+
+##### 1.方法一：普通的递归实现
+
+- 普通的递归思路很容易理解，就是通过循环递归的方式，一项一项地去遍历，如果每一项还是一个数组，那么就继续往下遍历，利用递归程序的方法，来实现数组的每一项的连接。
+
+  ```js
+  const a = [1, [2, [3, [4, 5]]]];
+  const flatten = (arr) => {
+    let result = [];
+    for (let i = 0; i < arr.length; i++) {
+      if (Array.isArray(arr[i])) {
+        result = result.concat(flatten(arr[i]));
+      } else {
+        result.push(arr[i]);
+      }
+    }
+    return result;
+  };
+  console.log(flatten(a));
+  ```
+
+##### 2.方法二：利用reduce函数迭代
+
+```js
+const flatten = (arr) => {
+  return arr.reduce((prev,next)=>{
+    return prev.concat(Array.isArray(next)?flatten(next):next)
+  },[]);
+};
+```
+
+##### 3.方法三：扩展运算符实现
+
+```js
+const flatten = (arr) => {
+  while(arr.some(item=>Array.isArray(item))){
+    arr = [].concat(...arr);
+  }
+  return arr;
+};
+```
+
+##### 4.方法四：split和toString共同处理
+
+- 我们也可以通过 `split`和 `toString` 两个方法，来共同实现数组扁平化，由于数组会默认带一个 `toString`的方法，所以可以把数组直接转换成逗号分隔的字符串，然后再用 `split`方法把字符串重新转换为数组
+
+  ```js
+  const flatten = (arr) => {
+    return arr.toString().split(',')
+  };
+  ```
+
+##### 5.方法五：调用ES6中的flat
+
+- 我们还可以直接调用 `ES6` 中的 `flat`方法，可以直接实现数组扁平化
+
+  ```js
+  const flatten = (arr) => {
+    return arr.flat(Infinity)
+  };
+  ```
+
+##### 6.方法六：正则和JSON方法共同处理
+
+- 采用了将 `JSON.stringify` 的方法先转换为字符串，然后通过正则表达式过滤掉字符串中的数组的方括号，最后再利用 `JSON.parse` 把它转换成数组。
+
+  ```js
+  const flatten = (arr) => {
+    let str = JSON.stringify(arr);
+    str = str.replace(/(\[|\])/g,'');
+    str = `[${str}]`;
+    return JSON.parse(str);
+  };
+  ```
+
+  ​
 
 
 
